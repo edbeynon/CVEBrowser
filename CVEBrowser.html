@@ -1,0 +1,440 @@
+<!--
+Yocto CVE Browser
+Copyright (C) 2026 Psybrock Ltd
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yocto CVE Browser</title>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;color:#333;}
+.container{max-width:1400px;margin:0 auto;padding:20px;}
+
+header{background:#2c3e50;color:#fff;padding:20px;border-radius:8px;margin-bottom:20px;}
+.instructions{background:#fff3cd;border:1px solid #ffc107;padding:15px;margin-bottom:20px;border-radius:4px;}
+.controls,.package-list{background:#fff;padding:20px;border-radius:8px;
+box-shadow:0 2px 4px rgba(0,0,0,0.1);margin-bottom:20px;}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;margin-bottom:20px;}
+.stat-card{background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);text-align:center;}
+.stat-value{font-size:26px;font-weight:bold;}
+
+.package-item{border-bottom:1px solid #eee;padding:15px;}
+.package-header{display:flex;justify-content:space-between;cursor:pointer;}
+.package-details{display:none;margin-top:15px;}
+.package-item.expanded .package-details{display:block;}
+
+.package-name{font-weight:600;}
+.package-badge{padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;}
+
+.badge-safe{background:#d4edda;color:#155724;}
+.badge-warning{background:#fff3cd;color:#856404;}
+.badge-danger{background:#f8d7da;color:#721c24;}
+
+.cve-item{background:#f8f9fa;padding:10px;margin-bottom:8px;border-left:4px solid #ccc;}
+.cve-item.unpatched{border-left:6px solid #e74c3c;}
+.cve-item.critical-unpatched{border-left:8px solid #721c24;background:#fdecea;}
+
+.cve-id{font-weight:600;}
+
+.cve-severity{display:inline-block;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;margin-left:8px;}
+.severity-critical{background:#721c24;color:#fff;}
+.severity-high{background:#e74c3c;color:#fff;}
+.severity-medium{background:#f39c12;color:#fff;}
+.severity-low{background:#3498db;color:#fff;}
+
+.cve-status{
+display:inline-block;
+padding:3px 10px;
+border-radius:4px;
+font-size:13px;
+font-weight:700;
+margin-left:8px;
+}
+.status-unpatched{background:#e74c3c;color:#fff;}
+.status-patched{background:#2ecc71;color:#fff;}
+
+.cve-link{color:#3498db;text-decoration:none;font-size:13px;margin-top:5px;display:inline-block;}
+.cve-link:hover{text-decoration:underline;}
+
+.empty-state{text-align:center;padding:60px 20px;color:#95a5a6;}
+.empty-state-icon{font-size:64px;margin-bottom:20px;}
+
+.hidden{display:none;}
+input,select{padding:10px;margin-top:5px;border:1px solid #ddd;border-radius:4px;}
+button{padding:12px 24px;background:#2c3e50;color:#fff;border:none;border-radius:4px;cursor:pointer;}
+button:hover{background:#34495e;}
+</style>
+</head>
+
+<body>
+<div class="container">
+<header>
+<h1>
+🔍 Yocto CVE Browser by Psybrock Ltd
+<span style="font-size:14px;font-weight:400;margin-left:10px;">
+v0.1.0-beta
+</span>
+</h1>
+
+<p>
+Browse CVE reports from your Yocto build |
+<a href="https://github.com/edbeynon/CVEBrowser"
+   target="_blank"
+   style="color:#ffffff;text-decoration:underline;margin-left:6px;">
+GitHub
+</a>
+|
+<a href="https://www.gnu.org/licenses/gpl-3.0.en.html"
+   target="_blank"
+   style="color:#ffffff;text-decoration:underline;margin-left:6px;">
+GPLv3 License
+</a>
+</p>
+</header>
+
+<div class="instructions">
+Select your Yocto <code>build/tmp/deploy/cve</code> directory.
+</div>
+
+<div class="controls">
+<label>Load CVE Directory:</label>
+<input type="file" id="cveDirectory" webkitdirectory directory multiple>
+<br><br>
+<label>Or Load Individual Files:</label>
+<input type="file" id="cveFiles" accept=".json" multiple>
+<br><br>
+
+<div id="filterControls" style="display:none;">
+
+<div style="display:flex;align-items:center;gap:25px;flex-wrap:wrap;">
+
+<div>
+<label>Search Package:</label><br>
+<input type="text" id="searchFilter" style="width:260px;" placeholder="e.g. openssl">
+</div>
+
+<div>
+<label>Filter:</label><br>
+<select id="severityFilter" style="width:260px;">
+<option value="all">All Packages</option>
+<option value="with-cves">With CVEs Only</option>
+<option value="unpatched" selected>With Unpatched CVEs</option>
+<option value="patched-only">With Patched CVEs Only</option>
+<option value="critical-unpatched">Critical + Unpatched Only</option>
+<option value="without-cves">Without CVEs Only</option>
+<option value="native">Native Packages Only</option>
+<option value="runtime">Runtime Packages Only</option>
+</select>
+</div>
+
+<div style="display:flex;align-items:center;gap:8px;margin-top:22px;">
+<input type="checkbox" id="toggleSummary" checked style="width:18px;height:18px;cursor:pointer;">
+<label for="toggleSummary" style="cursor:pointer;">Show CVE Summaries</label>
+</div>
+
+</div>
+</div>
+</div>
+
+<div id="statsContainer" class="stats hidden"></div>
+
+<div id="packageList" class="package-list">
+<div class="empty-state">
+<div class="empty-state-icon">📦</div>
+<h3>No CVE data loaded</h3>
+<p>Select a directory or files to begin browsing</p>
+</div>
+</div>
+
+</div>
+
+<script>
+class CVEBrowser {
+constructor(){
+this.packages=new Map();
+this.filteredPackages=[];
+this.initialRender=10;
+this.showSummary=true;
+this.init();
+}
+
+init(){
+document.getElementById('cveDirectory').addEventListener('change',e=>this.processFiles(e.target.files));
+document.getElementById('cveFiles').addEventListener('change',e=>this.processFiles(e.target.files));
+document.getElementById('severityFilter').addEventListener('change',()=>this.applyFilters());
+document.getElementById('searchFilter').addEventListener('input',()=>this.applyFilters());
+document.getElementById('toggleSummary').addEventListener('change',e=>{
+this.showSummary=e.target.checked;
+this.render();
+});
+}
+
+async processFiles(files){
+this.packages.clear();
+
+for(const file of files){
+if(!file.name.endsWith('_cve.json')) continue;
+
+const packageName=file.name.replace(/_cve\.json$/,'');
+const isLargeFile=file.size>10*1024*1024;
+
+try{
+const data=JSON.parse(await file.text());
+const cves=data.package?.[0]?.issue||[];
+const version=data.package?.[0]?.version||'';
+
+let unpatchedCount=0;
+let patchedCount=0;
+let criticalUnpatched=false;
+
+cves.forEach(c=>{
+const status=(c.status||'').trim().toLowerCase();
+const score=parseFloat(c.scorev3||c.scorev2||0);
+if(status.includes('unpatched')){
+unpatchedCount++;
+if(score>=9)criticalUnpatched=true;
+}
+if(status.includes('patched'))patchedCount++;
+});
+
+this.packages.set(packageName,{
+name:packageName,
+version,
+data,
+cves,
+unpatchedCount,
+patchedCount,
+hasUnpatched:unpatchedCount>0,
+hasPatchedOnly:patchedCount>0 && unpatchedCount===0,
+criticalUnpatched,
+largeFile:isLargeFile
+});
+}catch(e){console.error("Parse error",file.name,e);}
+}
+
+this.updateStats();
+document.getElementById('severityFilter').value='unpatched';
+this.applyFilters();
+document.getElementById('filterControls').style.display='block';
+}
+
+updateStats(){
+const all=[...this.packages.values()];
+const total=all.length;
+const withCVEs=all.filter(p=>p.cves?.length>0).length;
+const packagesWithUnpatched=all.filter(p=>p.hasUnpatched).length;
+const totalCVEs=all.reduce((s,p)=>s+(p.cves?.length||0),0);
+const totalUnpatched=all.reduce((s,p)=>s+(p.unpatchedCount||0),0);
+
+document.getElementById('statsContainer').innerHTML=`
+<div class="stat-card"><div class="stat-value">${total}</div><div>Total Packages</div></div>
+<div class="stat-card"><div class="stat-value">${withCVEs}</div><div>With CVEs</div></div>
+<div class="stat-card"><div class="stat-value">${packagesWithUnpatched}</div><div>Packages With Unpatched</div></div>
+<div class="stat-card"><div class="stat-value">${totalCVEs}</div><div>Total CVEs</div></div>
+<div class="stat-card"><div class="stat-value">${totalUnpatched}</div><div>Total Unpatched CVEs</div></div>
+`;
+document.getElementById('statsContainer').classList.remove('hidden');
+}
+
+applyFilters(){
+const filter=document.getElementById('severityFilter').value;
+const search=document.getElementById('searchFilter').value.toLowerCase();
+const nativeRegex=/-native$|^nativesdk-|(-cross|crosssdk)|-tools$|-dev$|-dbg$|-doc$|-staticdev$/i;
+
+this.filteredPackages=[...this.packages.values()].filter(pkg=>{
+
+if(search && !pkg.name.toLowerCase().includes(search))
+return false;
+
+switch(filter){
+case 'with-cves':return pkg.cves.length>0;
+case 'without-cves':return pkg.cves.length===0;
+case 'unpatched':return pkg.unpatchedCount>0;
+case 'patched-only':return pkg.hasPatchedOnly;
+case 'critical-unpatched':return pkg.criticalUnpatched;
+case 'native':return nativeRegex.test(pkg.name);
+case 'runtime':return !nativeRegex.test(pkg.name);
+default:return true;
+}
+});
+
+this.render();
+}
+
+render(){
+const container=document.getElementById('packageList');
+
+if(!this.filteredPackages.length){
+container.innerHTML=`<div class="empty-state">
+<div class="empty-state-icon">📦</div>
+<h3>No packages match your filters</h3>
+</div>`;
+return;
+}
+
+this.filteredPackages.sort((a,b)=>
+b.cves.length-a.cves.length||a.name.localeCompare(b.name)
+);
+
+const firstBatch=this.filteredPackages.slice(0,this.initialRender);
+container.innerHTML=firstBatch.map(p=>this.renderPackage(p)).join('');
+
+if(this.filteredPackages.length>this.initialRender)
+this.addLoadMore(container);
+
+this.attachHandlers();
+}
+
+addLoadMore(container){
+const btn=document.createElement('button');
+btn.textContent="Load More";
+btn.style.marginTop="20px";
+let rendered=this.initialRender;
+
+btn.onclick=()=>{
+btn.remove();
+const next=this.filteredPackages.slice(rendered,rendered+this.initialRender);
+next.forEach(pkg=>container.insertAdjacentHTML('beforeend',this.renderPackage(pkg)));
+rendered+=next.length;
+this.attachHandlers();
+if(rendered<this.filteredPackages.length)container.appendChild(btn);
+};
+
+container.appendChild(btn);
+}
+
+renderPackage(pkg){
+
+const visibleCVEs=(pkg.largeFile
+? pkg.cves.filter(c=>(c.status||'').toLowerCase().includes('unpatched'))
+: pkg.cves
+).slice().sort((a,b)=>{
+
+const aStatus=(a.status||'').toLowerCase();
+const bStatus=(b.status||'').toLowerCase();
+
+const aUnpatched=aStatus.includes('unpatched');
+const bUnpatched=bStatus.includes('unpatched');
+
+const aScore=parseFloat(a.scorev3||a.scorev2||0);
+const bScore=parseFloat(b.scorev3||b.scorev2||0);
+
+const aCritical=aUnpatched && aScore>=9;
+const bCritical=bUnpatched && bScore>=9;
+
+if(aCritical && !bCritical) return -1;
+if(!aCritical && bCritical) return 1;
+if(aUnpatched && !bUnpatched) return -1;
+if(!aUnpatched && bUnpatched) return 1;
+
+return bScore-aScore;
+});
+
+const badgeClass =
+pkg.unpatchedCount>0?'badge-danger':
+pkg.cves.length>0?'badge-warning':'badge-safe';
+
+const badgeLabel =
+pkg.unpatchedCount>0?`${pkg.unpatchedCount} Unpatched`:
+`${pkg.cves.length} CVEs`;
+
+return `<div class="package-item">
+<div class="package-header">
+<span class="package-name">
+${pkg.name}
+${pkg.version?`<span style="color:#666;font-weight:400;"> (v${pkg.version})</span>`:''}
+<span style="margin-left:10px;font-size:13px;">
+🔴 ${pkg.unpatchedCount} / 🟢 ${pkg.patchedCount}
+</span>
+</span>
+<span class="package-badge ${badgeClass}">${badgeLabel}</span>
+</div>
+<div class="package-details">
+
+${pkg.largeFile?`
+<div style="margin-bottom:10px;padding:8px;background:#eef2f7;border-left:4px solid #2c3e50;font-size:13px;">
+⚠ Large file detected – patched CVEs suppressed for performance
+</div>`:''}
+
+${visibleCVEs.map(c=>this.renderCVE(c)).join('')}
+</div></div>`;
+}
+
+renderCVE(cve){
+const id=this.escapeHTML(cve.id||cve.cve_id||'Unknown CVE');
+const desc=this.escapeHTML(cve.summary||cve.description||'');
+const rawStatus=cve.status||'';
+const statusClean=rawStatus.toLowerCase();
+const statusEscaped=this.escapeHTML(rawStatus);
+
+let score=parseFloat(cve.scorev3||cve.scorev2||0);
+let severityClass='severity-medium';
+
+if(score>=9)severityClass='severity-critical';
+else if(score>=7)severityClass='severity-high';
+else if(score>=4)severityClass='severity-medium';
+else if(score>0)severityClass='severity-low';
+
+let itemClass='';
+let statusClass='';
+
+if(statusClean.includes('unpatched')){
+itemClass='unpatched';
+statusClass='status-unpatched';
+if(score>=9)itemClass='critical-unpatched';
+}else if(statusClean.includes('patched')){
+statusClass='status-patched';
+}
+
+const link=id.startsWith('CVE-')
+?`https://nvd.nist.gov/vuln/detail/${id}`:'#';
+
+return `<div class="cve-item ${itemClass}">
+<div class="cve-id">
+${id}
+${score?`<span class="cve-severity ${severityClass}">${score}</span>`:''}
+${rawStatus?`<span class="cve-status ${statusClass}">${statusEscaped}</span>`:''}
+</div>
+${this.showSummary?`<div>${desc}</div>`:''}
+${link!=='#'?`<a class="cve-link" target="_blank" href="${link}">View on NVD →</a>`:''}
+</div>`;
+}
+
+attachHandlers(){
+document.querySelectorAll('.package-header').forEach(h=>{
+if(!h.dataset.bound){
+h.dataset.bound=true;
+h.onclick=()=>h.parentElement.classList.toggle('expanded');
+}
+});
+}
+
+escapeHTML(str){
+return str.replace(/&/g,"&amp;")
+.replace(/</g,"&lt;")
+.replace(/>/g,"&gt;");
+}
+}
+
+new CVEBrowser();
+</script>
+</body>
+</html>
